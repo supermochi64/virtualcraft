@@ -90,7 +90,7 @@ static void copy_left(void)
    frame's picture is taken near its end (~19 ms), so the left eye copied now and the right one right after (by the PCM
    interrupt, 4 columns a tick, ~5 ms) show together if that is done by then: allowed up to 12 ms into a frame, later
    pictures wait for the next frame's start. The right eye alternates between two buffers, so the next picture can be
-   drawn while it is still being copied. (Real hardware reads left 3-8 ms, right 13-18: untested there.) */
+   drawn while it is still being copied. */
 static void hand_over(u32 *r)
 {
     u32 ph;
