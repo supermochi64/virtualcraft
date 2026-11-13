@@ -9,6 +9,7 @@ with your sword.
 </p>
 
 <p align="center">
+  <a href="https://supermochi64.itch.io/virtualcraft"><img src="https://img.shields.io/badge/%F0%9F%8E%AE%20Play%20in%20your%20browser-itch.io-FA5C5C?style=for-the-badge&logo=itchdotio&logoColor=white" alt="Play Virtualcraft in your browser on itch.io"></a>
   <a href="https://youtube.com/watch?v=AccXNXYPizw"><img src="https://img.shields.io/badge/%E2%96%B6%20Watch%20the%20trailer-YouTube-red?style=for-the-badge&logo=youtube" alt="Watch the trailer on YouTube"></a>
   <a href="../../releases/latest"><img src="https://img.shields.io/badge/%E2%AC%87%20Download-virtualcraft.vb%20(2%20MB)-black?style=for-the-badge" alt="Download"></a>
 </p>
@@ -27,6 +28,9 @@ SHA-1: `a4de2d6df76eedb4c1a32c9b32966abdd51a1865`
 
 ## Playing it
 
+- **In your browser:** [supermochi64.itch.io/virtualcraft](https://supermochi64.itch.io/virtualcraft), no install needed.
+  Keyboard: WASD walk, arrow keys look, Space jump, J break, K place, Q/E pick a block, Enter pause.
+  Gamepads and phone touch controls work too.
 - **Emulators:** any Virtual Boy emulator that runs commercial games, e.g. Mednafen or RetroArch with the Beetle VB core.
 - **Flash carts:** the ROM is 2 MB, so it fits 2 MB flash carts.
 
