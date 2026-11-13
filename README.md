@@ -4,6 +4,15 @@ A block-building game for the **Virtual Boy**: a small island in an endless sea,
 20 MHz CPU. Break and place blocks, build whatever you like, meet pigs, sheep and chickens, and fight zombies and boomcaps
 with your sword.
 
+<p align="center">
+  <a href="https://youtube.com/watch?v=AccXNXYPizw"><img src="screenshots/trailer.jpg" width="760" alt="Watch the Virtualcraft trailer on YouTube"></a>
+</p>
+
+<p align="center">
+  <a href="https://youtube.com/watch?v=AccXNXYPizw"><img src="https://img.shields.io/badge/%E2%96%B6%20Watch%20the%20trailer-YouTube-red?style=for-the-badge&logo=youtube" alt="Watch the trailer on YouTube"></a>
+  <a href="../../releases/latest"><img src="https://img.shields.io/badge/%E2%AC%87%20Download-virtualcraft.vb%20(2%20MB)-black?style=for-the-badge" alt="Download"></a>
+</p>
+
 ![Title](screenshots/title.png)
 
 | | | |
