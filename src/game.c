@@ -42,7 +42,7 @@ u16 iatan2(s32 x, s32 z)
     static const u16 at[33] = {0,20,41,61,81,101,121,140,160,179,197,216,234,252,269,286,302,318,334,349,364,379,393,406,419,432,445,457,469,480,491,502,512};   /* atan(i/32) in 1/4096 turns */   /* atan(i/32) in 1/4096 turns, i 0..32 */
     s32 ax = x < 0 ? -x : x, az = z < 0 ? -z : z, a;
     if (!ax && !az) return 0;
-    if (ax <= az) a = at[(ax * 32) / az];          /* (0..512: from +z toward +x) */
+    if (ax <= az) a = at[(ax * 32) / az];          /* 0..512: from +z toward +x */
     else a = 1024 - at[(az * 32) / ax];
     if (a > 512 && ax <= az) a = 512;
     if (z < 0) a = 2048 - a;
@@ -147,7 +147,7 @@ static int box_hits(s32 x, s32 y, s32 z)
 {
     int x0 = (x - HW_) >> 12, x1 = (x + HW_ - 1) >> 12, y0 = y >> 12, y1 = (y + HT - 1) >> 12, z0 = (z - HW_) >> 12, z1 = (z + HW_ - 1) >> 12;
     int a, b, c;
-    if (x0 < 1 || z0 < 1 || x1 >= WX - 1 || z1 >= WZ - 1) return 1;     /* (the world's edge: the sea goes on, the swimmer may not) */
+    if (x0 < 1 || z0 < 1 || x1 >= WX - 1 || z1 >= WZ - 1) return 1;     /* the world's edge: the sea goes on, the swimmer may not */
     for (a = x0; a <= x1; a++)
         for (b = y0; b <= y1; b++)
             for (c = z0; c <= z1; c++)
@@ -250,37 +250,11 @@ void game_init(void)
     mobs_init();
 }
 
-#ifdef DEMO
-/* (tools/video: a director writes one command a step: 1 place block d at a b c (hand swing, sound), 2 break a b c) */
-volatile s32 demo_op, demo_a, demo_b, demo_c, demo_d, demo_n, demo_fly;   /* (demo_fly: no physics, the director places the player) */
-volatile s32 demo_q[16][4];                     /* (or a queue of places: demo_n left, taken one a step from the end) */
-static void demo_step(void)
-{
-    if (demo_n > 0) { demo_n--; demo_op = demo_q[demo_n][0]; demo_a = demo_q[demo_n][1]; demo_b = demo_q[demo_n][2]; demo_c = demo_q[demo_n][3] & 0xFFFF; demo_d = demo_q[demo_n][3] >> 16; }
-    if (demo_op == 1) {
-        int t = demo_d;
-        if (PLANT(block_at(demo_a, demo_b, demo_c))) world_set(demo_a, demo_b, demo_c, AIR);
-        world_set(demo_a, demo_b, demo_c, t);
-        sfx(t == STONE || t == COBBLE || t == BRICK || t == LAMP || t == GLASS ? S_PLACE_HARD : S_PLACE, 0);
-        swing = 8;
-    } else if (demo_op == 2) {
-        int t = block_at(demo_a, demo_b, demo_c);
-        world_set(demo_a, demo_b, demo_c, AIR);
-        burst(demo_a, demo_b, demo_c, t);
-        sfx(S_DUG, 0); swing = 10;
-    }
-    demo_op = 0;
-}
-#endif
 
 void game_tick(u16 k)
 {
     u16 press = k & ~pad_old;
     s32 fwd = 0, side = 0, sy, cy, spd, ax, az;
-#ifdef DEMO
-    s32 fx0 = px, fy0 = py, fz0 = pz;
-    demo_step();
-#endif
     pad_old = k;
     /* looking: the right pad, faster the longer it is held */
     if (k & (K_RL | K_RR)) { if (yaw_v < 9 * 16) yaw_v += 10; } else yaw_v = 26;
@@ -329,7 +303,7 @@ void game_tick(u16 k)
         if ((hitx || hitz) && on_ground && (fwd || side)) {
             if (!box_hits(ox + vx, py + Q + 64, oz + vz)) vy = JUMPV;
         }
-        if (in_water && (hitx || hitz) && (fwd || side)) vy = 300;    /* (climb out of the water) */
+        if (in_water && (hitx || hitz) && (fwd || side)) vy = 300;    /* climb out of the water */
         if (hitx) vx = 0;
         if (hitz) vz = 0;
     }
@@ -349,12 +323,9 @@ void game_tick(u16 k)
         } else { walk_amt -= walk_amt >> 3; step_acc = 12; }
         if (in_water && sp2 > 100 * 100 && (frame_no & 31) == 0) sfx(S_STEP_WATER, 1);
     }
-#ifdef DEMO
-    if (demo_fly) { px = fx0; py = fy0; pz = fz0; vx = vy = vz = 0; walk_amt = 0; in_water = head_water = 0; }
-#endif
     /* aiming, breaking, placing */
     aim();
-    /* the blow: a creature in reach is hit (the sword hits harder), else L breaks blocks as before */
+    /* the blow: a creature in reach is hit (the sword hits harder), else L breaks blocks */
     if (atk_cd) atk_cd--;
     if ((k & K_L) && !atk_cd && !death_t) {
         s32 sy2 = SIN(yaw >> 4), cy2 = COS(yaw >> 4), sp2 = SIN(pitch >> 4), cp2 = COS(pitch >> 4);
@@ -372,7 +343,7 @@ void game_tick(u16 k)
             mine_t++;
             if (mine_t >= h) {
                 world_set(tgt_x, tgt_y, tgt_z, AIR);
-                if (PLANT(block_at(tgt_x, tgt_y + 1, tgt_z))) world_set(tgt_x, tgt_y + 1, tgt_z, AIR);   /* (its ground gone) */
+                if (PLANT(block_at(tgt_x, tgt_y + 1, tgt_z))) world_set(tgt_x, tgt_y + 1, tgt_z, AIR);   /* its ground gone */
                 /* water flows in from beside or above */
                 if (block_at(tgt_x, tgt_y + 1, tgt_z) == WATER || block_at(tgt_x - 1, tgt_y, tgt_z) == WATER ||
                     block_at(tgt_x + 1, tgt_y, tgt_z) == WATER || block_at(tgt_x, tgt_y, tgt_z - 1) == WATER ||
@@ -388,8 +359,8 @@ void game_tick(u16 k)
     if (place_t) place_t--;
     if (tgt_on && (k & K_R) && (!(hold_r) || !place_t) && hotbar[hand_sel] != SWORD) {
         int x = tgt_px, y = tgt_py, z = tgt_pz, b = block_at(x, y, z);
-        if (PLANT(b) && !PLANT(hotbar[hand_sel])) { x = tgt_x; y = tgt_y; z = tgt_z; b = AIR; }   /* (a plant gives way to a block) */
-        if (PLANT(hotbar[hand_sel]) && !SOLID(block_at(x, y - 1, z))) b = -1;                    /* (plants want ground) */
+        if (PLANT(b) && !PLANT(hotbar[hand_sel])) { x = tgt_x; y = tgt_y; z = tgt_z; b = AIR; }   /* a plant gives way to a block */
+        if (PLANT(hotbar[hand_sel]) && !SOLID(block_at(x, y - 1, z))) b = -1;                    /* plants want ground */
         if ((b == AIR || b == WATER) && (unsigned)y < WH && (unsigned)x < WX && (unsigned)z < WZ) {
             /* not inside the player */
             s32 x0 = (px - HW_) >> 12, x1 = (px + HW_ - 1) >> 12, y0 = py >> 12, y1 = (py + HT - 1) >> 12, z0 = (pz - HW_) >> 12, z1 = (pz + HW_ - 1) >> 12;
@@ -490,7 +461,7 @@ void game_draw(void)
         s32 bob = (SIN(walk_ph) * walk_amt) >> 16, bx = (COS(walk_ph >> 1) * walk_amt) >> 17;
         s32 sw = swing ? SIN(swing * 205) >> 7 : 0;
         c.x = 150 + bx - sw / 2; c.y = -86 + (bob < 0 ? -bob : bob) / 2 - sw / 3; c.z = 300 + sw;
-        if (hotbar[hand_sel] == SWORD) { c.x += 18; c.y += 22; }   /* (the sword: twice the size, its blade up into the picture) */
+        if (hotbar[hand_sel] == SWORD) { c.x += 18; c.y += 22; }   /* the sword: twice the size, its blade up into the picture */
         draw_cube_cam(&c, hotbar[hand_sel] == SWORD ? 60 : 30, hotbar[hand_sel], 480 + sw * 4);
     }
 }

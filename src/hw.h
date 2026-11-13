@@ -1,4 +1,4 @@
-/* Virtual Boy hardware: the registers this demo uses (addresses as libgccvb has them, public domain). */
+/* Virtual Boy hardware: the registers this game uses (addresses as libgccvb has them, public domain). */
 #ifndef VC_HW_H
 #define VC_HW_H
 

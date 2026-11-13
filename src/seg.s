@@ -381,7 +381,7 @@ _\n:
 	add	r24, r23
 	mov	r11, r12
 	sub	r10, r12		/* h */
-	movea	128, r0, r13		/* (TEX_HMAX: taller columns go to the C path, src/render.c tex_col) */
+	movea	128, r0, r13		/* TEX_HMAX: taller columns go to the C path, src/render.c tex_col */
 	cmp	r13, r12
 	bgt	.T\n\()tnext
 	mov	r10, r13		/* a */
@@ -395,7 +395,7 @@ _\n:
 	mov	r16, r14
 2:	cmp	r14, r13
 	bge	.T\n\()tnext
-	/* u clamped 0..15; src = base + u * 2816 + hoff[h] * 4 (TEX_PER / 16 words: tools/textures.py, HMAX 128) */
+	/* u clamped 0..15; src = base + u * 2816 + hoff[h] * 4 (TEX_PER / 16 words, TEX_HMAX 128) */
 	cmp	r0, r15
 	bge	3f
 	mov	r0, r15
@@ -464,7 +464,7 @@ _\n:
 	mov	-1, r11
 7:	cmp	r0, r2
 	be	11f
-	mov	r14, r29		/* (key: only the non-zero pixels) */
+	mov	r14, r29		/* key: only the non-zero pixels */
 	shr	1, r29
 	or	r14, r29
 	movhi	0x5555, r0, r1
@@ -589,7 +589,7 @@ _far_step:
 	ld.w	52[r6], r20
 	ld.w	56[r6], r21
 	ld.w	60[r6], r22
-	ld.w	60[r6], r11		/* (the events' start, for the count) */
+	ld.w	60[r6], r11		/* the events' start, for the count */
 	mov	r0, r25			/* p */
 .Fsample:
 	ld.h	0[r12], r27		/* yb */
@@ -615,7 +615,7 @@ _far_step:
 	add	r24, r23
 	cmp	r21, r23
 	bgt	1f
-	/* (in the near ring: drawn by the polygons; its surface still hides what lies behind it) */
+	/* in the near ring: drawn by the polygons; its surface still hides what lies behind it */
 	shl	6, r28
 	or	r29, r28
 	mov	r16, r23

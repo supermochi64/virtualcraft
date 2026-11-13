@@ -12,27 +12,10 @@ _pcm_isr:
 	st.w	r9, 12[sp]
 	st.w	r10, 16[sp]
 	st.w	r11, 20[sp]
-#ifdef PROFILE
-	/* the sampling profiler: where the interrupt came in, 64-byte bins of the code (tools/prof.py) */
-	stsr	sr0, r6
-	movhi	0xF900, r6, r6		/* (minus 0x07000000) */
-	shr	6, r6
-	movea	2047, r0, r7
-	cmp	r7, r6
-	bh	5f
-	shl	1, r6
-	movhi	hi(_prof_hist), r0, r7
-	movea	lo(_prof_hist), r7, r7
-	add	r6, r7
-	ld.h	0[r7], r8
-	add	1, r8
-	st.h	r8, 0[r7]
-5:
-#endif
 	movhi	hi(_pcm_dummy), r0, r6
 	ld.b	lo(_pcm_dummy)[r6], r7
 	cmp	r0, r7
-	bne	4f			/* (the follow-up interrupt: only the clear) */
+	bne	4f			/* the follow-up interrupt: only the clear */
 	movhi	hi(_pcm), r0, r6
 	movea	lo(_pcm), r6, r6
 	mov	r0, r7
@@ -79,19 +62,15 @@ _pcm_isr:
 	st.b	r9, 0x0504[r8]		/* channel 5 (index 4): SxLRV */
 	shr	8, r9
 	st.b	r9, 0x0510[r8]		/* SxEV0 */
-	movhi	hi(_pcm_irqs), r0, r8
-	ld.w	lo(_pcm_irqs)[r8], r9
-	add	1, r9
-	st.w	r9, lo(_pcm_irqs)[r8]
 	movhi	hi(_pcm_step), r0, r8
 	ld.w	lo(_pcm_step)[r8], r9
 	movhi	hi(_pcm_time), r0, r8
 	ld.w	lo(_pcm_time)[r8], r7
 	add	r9, r7
-	st.w	r7, lo(_pcm_time)[r8]		/* (0.1 ms units at either rate) */
-4:	/* acknowledge the timer (enabled, its interrupt on, 20 us, clear the zero flag). Mednafen (timer.c, "faulty
-	   Z-Stat-Clr") ignores the clear while the counter is still 0 -- the tick it fired on -- and the interrupt
-	   comes again a tick later: then (the flag still set) the next one only clears. */
+	st.w	r7, lo(_pcm_time)[r8]		/* 0.1 ms units at either rate */
+4:	/* acknowledge the timer (enabled, its interrupt on, 20 us, clear the zero flag). The clear is
+	   ignored while the counter is still 0 (the tick it fired on): the interrupt then comes again a tick later
+	   and that one only clears. */
 	movhi	0x0200, r0, r8
 	movea	0x1D, r0, r9
 	st.b	r9, 0x20[r8]
@@ -363,7 +342,7 @@ _pcm_isr:
 	st.w	r7, lo(_pcm_step)[r6]
 	movhi	0x0200, r0, r8
 	movea	50, r0, r9
-	st.b	r9, 0x18[r8]			/* (TLR: 50 x 20 us) */
+	st.b	r9, 0x18[r8]			/* TLR: 50 x 20 us */
 7:
 	ld.w	0[sp], r6
 	ld.w	4[sp], r7

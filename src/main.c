@@ -3,13 +3,13 @@
 #include "game.h"
 
 #define VEC(n) (*(volatile u32 *)(0x0500FFC0 + (n) * 4))
-volatile u32 ticks, late, shown, busy_sum, busy_n;
+volatile u32 ticks, shown;
 /* the right eye's hand-over: the PCM interrupt copies cp_left columns from cp_src to cp_dst; r_pending starts at a frame */
 volatile u32 cp_left, frame_irq;
 u32 *volatile cp_src, *volatile cp_dst, *volatile r_pending;
 volatile u32 pad_on;
 volatile u16 pad_test;
-extern volatile unsigned int pcm_irqs, pcm_time;
+extern volatile unsigned int pcm_time;
 void pcm_wake(void);
 void hud_init(u32 *scratch);
 void game_camera(void);
@@ -86,7 +86,7 @@ static void copy_left(void)
     }
 }
 
-/* a finished picture to the display with little waiting. Measured in Mednafen (tools/check_eyes.py with forced phases): a
+/* a finished picture to the display with little waiting: a
    frame's picture is taken near its end (~19 ms), so the left eye copied now and the right one right after (by the PCM
    interrupt, 4 columns a tick, ~5 ms) show together if that is done by then: allowed up to 12 ms into a frame, later
    pictures wait for the next frame's start. The right eye alternates between two buffers, so the next picture can be
@@ -94,10 +94,10 @@ static void copy_left(void)
 static void hand_over(u32 *r)
 {
     u32 ph;
-    while (cp_left) ;                              /* (the last right eye still on its way: rare) */
+    while (cp_left) ;                              /* the last right eye still on its way: rare */
     for (;;) {
-        ph = pcm_time - frame_irq;                 /* (0.1 ms since the frame began) */
-        if (ph <= 140 || ph > 400) break;          /* (no frame start for long: never hang) */
+        ph = pcm_time - frame_irq;                 /* 0.1 ms since the frame began */
+        if (ph <= 140 || ph > 400) break;          /* no frame start for long: never hang */
     }
     copy_left();
     cp_src = r; cp_dst = (u32 *)R_FB0; cp_left = VW;
@@ -153,35 +153,6 @@ static void pause_screen(void)
     music_on(1);
     for (i = 0; i < 6; i++) wait_tick();
 }
-#ifdef BENCH
-/* fixed views, each drawn 8 times: bench_t[i] = 100 us ticks for all of them (tools/bench.py) */
-volatile u32 bench_t[8], bench_done, bench_p[8][8];
-extern u32 prof[8];
-static const s16 bench_pose[8][5] = {        /* x y z (blocks x 16), yaw, pitch */
-    {0, 0, 0, 0, 0}, {0, 0, 0, 2048, 0}, {0, 0, 0, 1024, -500}, {0, 0, 0, 3072, 300},
-    {32 * 16, 22 * 16, 12 * 16, 0, -280}, {24 * 16, 14 * 16, 40 * 16, 1400, -200}, {0, 0, 0, 512, -900}, {40 * 16, 12 * 16, 30 * 16, 2600, -100}};
-static void bench(void)
-{
-    int i, j;
-    for (i = 0; i < 8; i++) {
-        u32 t0 = pcm_time, q[8];
-        for (j = 0; j < 8; j++) q[j] = prof[j];
-        for (j = 0; j < 8; j++) {
-            if (bench_pose[i][0]) { cam_x = bench_pose[i][0] * 16; cam_y = bench_pose[i][1] * 16; cam_z = bench_pose[i][2] * 16; }
-            else { cam_x = spawn_x; cam_y = spawn_y + 414; cam_z = spawn_z; }
-            cam_yaw = bench_pose[i][3]; cam_pitch = bench_pose[i][4] & 4095;
-            fb_l = (u32 *)L_FB1; fb_r = (u32 *)R_FB1;
-            render_frame();
-        }
-        bench_t[i] = pcm_time - t0;
-        for (j = 0; j < 8; j++) bench_p[i][j] = prof[j] - q[j];
-        wait_tick();
-        present();
-    }
-    bench_done = 1;
-    for (;;) ;
-}
-#endif
 
 int main(void)
 {
@@ -197,10 +168,6 @@ int main(void)
     render_init();
     fb_l = (u32 *)L_FB1; fb_r = (u32 *)R_FB1;
     hud_init((u32 *)L_FB1);
-#ifdef BENCH
-    world_gen(1);
-    bench();
-#endif
     title_screen();
     game_init();
     last = ticks;
@@ -209,7 +176,7 @@ int main(void)
     render_prepare();
     for (;;) {
         static int rb;
-        u32 now, n, t0 = ticks;
+        u32 now, n;
         u16 k;
         /* draw the prepared picture, then prepare the next one (game steps, camera, cells) before waiting to show it */
         render_draw();
@@ -219,23 +186,10 @@ int main(void)
         if ((k & K_START) && !(pad_prev & K_START)) { pause_screen(); now = last = ticks; n = 0; k = read_pad(); }
         pad_prev = k;
         if (n > 4) { last = now - 4; n = 4; }
-#ifdef CINEMA
-        n = 2; last = now - 2;                     /* (the video mode: 2 game steps a picture, however long it took: even time) */
-#endif
         while (last != now) { game_tick(k); last++; frame_no++; }
         game_camera();
         render_prepare();
-        busy_sum += ticks - t0; busy_n++;
-        VIP[BRTA] = BRIGHT_A + hurt_flash * 5;   /* (hurt: the dark shade glows red for a moment) */
-#ifdef STAMP
-        {   /* (tools/check_eyes.py: the picture's number in both eyes, 8 bits as 4-pixel blocks in the top left) */
-            int bit, e;
-            for (e = 0; e < 2; e++) {
-                u32 *fb = e ? fb_r : fb_l;
-                for (bit = 0; bit < 8; bit++) { int x; for (x = 0; x < 4; x++) fb[(4 + bit * 6 + x) * 16] = ((shown >> bit) & 1) ? 0xFFu : 0; }
-            }
-        }
-#endif
+        VIP[BRTA] = BRIGHT_A + hurt_flash * 5;   /* hurt: the dark shade glows red for a moment */
         hand_over(fb_r);
         shown_r = fb_r;
         shown++;
@@ -244,6 +198,3 @@ int main(void)
     }
     return 0;
 }
-#ifdef PROFILE
-volatile u16 prof_hist[2048];
-#endif

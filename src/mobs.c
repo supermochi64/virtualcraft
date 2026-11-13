@@ -36,7 +36,7 @@ static const u8 mob_maxhp[NMOBTYPE] = {10, 8, 4, 20, 10};
 static const s16 mob_speed[NMOBTYPE] = {120, 110, 100, 170, 110};
 
 static s32 respawn_t, tick_n;
-extern s32 player_x, player_y, player_z;          /* (Q12, src/game.c) */
+extern s32 player_x, player_y, player_z;          /* Q12, src/game.c */
 void player_hurt(int dmg, s32 fromx, s32 fromz);
 
 static int mob_box_hits(const Mob *m, s32 x, s32 y, s32 z)
@@ -58,7 +58,7 @@ static int mob_move(Mob *m, int ax, s32 d)
     *p += d;
     if (!mob_box_hits(m, m->x, m->y, m->z)) return 0;
     *p = old;
-    if (ax == 1 && d < 0) {                        /* (land on the block's top) */
+    if (ax == 1 && d < 0) {                        /* land on the block's top */
         s32 fy = ((old + d) >> 12) + 1;
         if (!mob_box_hits(m, m->x, fy << 12, m->z)) *p = fy << 12;
     }
@@ -85,7 +85,7 @@ static int spawn_one(int type, int near_ok)
         if (!near_ok && (dx >> 12) * (dx >> 12) + (dz >> 12) * (dz >> 12) < 14 * 14) continue;
         bi = biome_at(x, z);
         if (type == M_ZOMBIE || type == M_BOOM) {
-            /* (the wilderness: forest and rock, away from the cabin's meadow) */
+            /* the wilderness: forest and rock, away from the cabin's meadow */
             s32 mx = (x << 8) - meadow_x, mz = (z << 8) - meadow_z;
             if ((mx >> 8) * (mx >> 8) + (mz >> 8) * (mz >> 8) < 20 * 20) continue;
         } else if (b != GRASS || bi == 2) continue;
@@ -107,18 +107,6 @@ void mobs_init(void)
     for (i = 0; i < 3; i++) spawn_one(M_CHICKEN, 1);
     for (i = 0; i < 4; i++) spawn_one(M_ZOMBIE, 0);
     for (i = 0; i < 2; i++) spawn_one(M_BOOM, 0);
-#ifdef MOBTEST
-#ifndef MOBD
-#define MOBD 4
-#endif
-    /* (test: one of each in a row in front of the start, standing still) */
-    for (i = 0; i < NMOBTYPE; i++) {
-        Mob *m = &mobs[i];
-        int x = (player_x >> 12) - 4 + i * 2, z = (player_z >> 12) + MOBD;
-        m->alive = 1; m->type = (u8)i; m->hp = mob_maxhp[i]; m->x = (x << 12) + Q12 / 2; m->z = (z << 12) + Q12 / 2;
-        m->y = ground_at(x, z, WH - 1) << 12; m->yaw = (u16)(2048 + i * 300); m->state = 0; m->timer = 30000; m->onground = 0; m->anim = 0; m->flee = 0; m->hurt = 0;
-    }
-#endif
 }
 
 static int count(int type)
@@ -140,7 +128,7 @@ static void explode(Mob *m)
                 if (r2 > 5 + (int)(rnd() & 3) || b == AIR || b == BEDROCK || b == WATER) continue;
                 world_set(cx + i, cy + k, cz + j, AIR);
             }
-    /* (plants whose ground went, water into the hole from its rim) */
+    /* plants whose ground went, water into the hole from its rim */
     for (k = -3; k <= 4; k++)
         for (i = -4; i <= 4; i++)
             for (j = -4; j <= 4; j++) {
@@ -153,7 +141,7 @@ static void explode(Mob *m)
     sfx(S_BOOM, 0);
     boom_fx(m->x, m->y + Q12 / 2, m->z);
     dx = player_x - m->x; dz = player_z - m->z; dy = player_y - m->y;
-    d = ((dx < 0 ? -dx : dx) + (dz < 0 ? -dz : dz) + (dy < 0 ? -dy : dy)) >> 8;   /* (1/16 blocks, roughly) */
+    d = ((dx < 0 ? -dx : dx) + (dz < 0 ? -dz : dz) + (dy < 0 ? -dy : dy)) >> 8;   /* 1/16 blocks, roughly */
     if (d < 5 * 16) player_hurt(14 - d * 13 / (5 * 16), m->x, m->z);
     for (i = 0; i < NMOB; i++) {
         Mob *o = &mobs[i];
@@ -167,11 +155,8 @@ static void explode(Mob *m)
 void mobs_tick(void)
 {
     int i;
-#ifdef MOBFREEZE
-    return;                                       /* (test pictures: creatures stay where the tool puts them) */
-#endif
     tick_n++;
-    /* (the population comes back, out of sight) */
+    /* the population comes back, out of sight */
     if (++respawn_t >= 50 * 15) {
         respawn_t = 0;
         if (count(M_ZOMBIE) < 4) spawn_one(M_ZOMBIE, 0);
@@ -186,11 +171,11 @@ void mobs_tick(void)
         int hitx, hitz, inwater;
         int step = 1;
         if (!m->alive) continue;
-        if (m->alive > 1) { if (++m->alive > 40) m->alive = 0; continue; }   /* (dying: it falls over and fades) */
+        if (m->alive > 1) { if (++m->alive > 40) m->alive = 0; continue; }   /* dying: it falls over and fades */
         dxp = player_x - m->x; dzp = player_z - m->z;
-        d2 = (dxp >> 8) * (dxp >> 8) + (dzp >> 8) * (dzp >> 8);           /* (in 1/16 blocks, squared) */
+        d2 = (dxp >> 8) * (dxp >> 8) + (dzp >> 8) * (dzp >> 8);           /* in 1/16 blocks, squared */
         if (d2 > 12 * 12 * 256) {
-            /* (far from the player: a step every 4th tick, 4 times as long, staggered) */
+            /* far from the player: a step every 4th tick, 4 times as long, staggered */
             if (((tick_n + i) & 3) != 0) continue;
             step = 4;
         }
@@ -244,11 +229,11 @@ void mobs_tick(void)
         m->vx += (wx - m->vx) >> 2; m->vz += (wz - m->vz) >> 2;
         inwater = block_at(m->x >> 12, (m->y >> 12), m->z >> 12) == WATER;
         m->vy -= inwater ? 10 : 52;
-        if (inwater && m->vy < 60) m->vy += 30;          /* (they swim) */
+        if (inwater && m->vy < 60) m->vy += 30;          /* they swim */
         if (m->vy < -2000) m->vy = -2000;
         hitx = mob_move(m, 0, m->vx * step);
         hitz = mob_move(m, 2, m->vz * step);
-        if ((hitx || hitz) && m->onground) m->vy = 700;   /* (a step up: hop) */
+        if ((hitx || hitz) && m->onground) m->vy = 700;   /* a step up: hop */
         if (hitx) m->vx = 0;
         if (hitz) m->vz = 0;
         m->onground = 0;
@@ -267,7 +252,7 @@ int mobs_hit(s32 ox, s32 oy, s32 oz, s32 dx, s32 dy, s32 dz, s32 block_t, int dm
     s32 bt = block_t < Q12 * 3 ? block_t : Q12 * 3;
     for (i = 0; i < NMOB; i++) {
         Mob *m = &mobs[i];
-        s32 hw = mob_hw[m->type] + Q12 * 3 / 10, ht = mob_ht[m->type] + Q12 / 4, t;   /* (a little forgiving: aiming with a pad) */
+        s32 hw = mob_hw[m->type] + Q12 * 3 / 10, ht = mob_ht[m->type] + Q12 / 4, t;   /* a little forgiving: aiming with a pad */
         if (m->alive != 1) continue;
         /* the ray against the box, coarsely: step along it */
         for (t = Q12 / 4; t <= bt; t += Q12 / 8) {
@@ -287,7 +272,7 @@ int mobs_hit(s32 ox, s32 oy, s32 oz, s32 dx, s32 dy, s32 dz, s32 block_t, int dm
         m->vx = (kx * 500) / kl; m->vz = (kz * 500) / kl; m->vy = 500;
         sfx(m->type >= M_ZOMBIE ? S_GROAN : m->type == M_CHICKEN ? S_CLUCK : S_SQUEAL, 0);
         if (m->type < M_ZOMBIE) { m->flee = 150; m->state = 1; }
-        if (m->type == M_BOOM && m->state == 2) m->timer += 20;   /* (a blow puts the fuse back a little) */
+        if (m->type == M_BOOM && m->state == 2) m->timer += 20;   /* a blow puts the fuse back a little */
         if (!m->hp) { m->alive = 2; mob_poof(m); }
     }
     return 1;

@@ -183,7 +183,7 @@ void hud_draw(void)
     {
         static u32 hw_[80][2], hm_[80][2];
         static s32 last_state = -1;
-        static const u8 heart[6] = {0x36, 0x7F, 0x7F, 0x3E, 0x1C, 0x08};   /* (7 columns a row, bit 6 leftmost) */
+        static const u8 heart[6] = {0x36, 0x7F, 0x7F, 0x3E, 0x1C, 0x08};   /* 7 columns a row, bit 6 leftmost */
         s32 state = player_hp * 2 + (hurt_flash && (hurt_flash & 2));
         int hi, row, col;
         if (state != last_state) {

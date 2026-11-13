@@ -2,12 +2,6 @@
    the rock, and a small cabin by the spawn point. col_lo / col_hi say which part of a column can show a face. */
 #include "game.h"
 
-#ifdef HOST
-u8 world_mem[WX * WZ * WH];
-#endif
-#ifdef HOST
-u8 col_lo[WX * WZ], col_hi[WX * WZ];
-#endif
 static int gen_done;
 int surf_max;
 s32 spawn_x, spawn_y, spawn_z;
@@ -42,12 +36,7 @@ static int vnoise(int x, int z, int sh, int k)
     return a + (((c - a) * tz) >> 8);
 }
 
-#ifdef HOST
-#ifdef HOST
-u8 hmap[WX * WZ], surf_t[WX * WZ];
-#endif
-#endif
-/* (tree_x/z/y: each tree's crown: src/render.c draws far ones as sprites) */               /* (after the generation: the surface's height and block, src/render.c far field) */
+/* tree_x/z/y: each tree's crown: src/render.c draws far ones as sprites */               /* after the generation: the surface's height and block, src/render.c far field */
 static void put(int x, int y, int z, int t);
 u8 tree_x[128], tree_z[128], tree_y[128];
 int ntree;
@@ -55,7 +44,7 @@ int ntree;
 /* ---- the island: an irregular coast with bays and a few islets, a mountain in the north, a lake in the east; biomes from
    broad noise: forest, rocky hills, dunes on the coast, flower plains */
 enum { B_PLAINS, B_FOREST, B_ROCKY, B_DUNES };
-#define BIOME(x, z) col_lo[((x) << 6) + (z)]          /* (during the generation only) */
+#define BIOME(x, z) col_lo[((x) << 6) + (z)]          /* during the generation only */
 #define MOUNT_X 30
 #define MOUNT_Z 52
 #define LAKE_X 47
@@ -66,7 +55,7 @@ static int isqrt(int v) { int r = 0; while ((r + 1) * (r + 1) <= v) r++; return 
 static int land_at(int x, int z)                    /* > 0 on land, the more inland the larger (256 ~ 12 blocks in) */
 {
     int dx = x * 2 - 63, dz = z * 2 - 63, r2 = dx * dx + dz * dz, l;
-    static const s8 islets[3][3] = {{9, 10, 3}, {55, 13, 2}, {10, 52, 3}};   /* (x, z, radius) */
+    static const s8 islets[3][3] = {{9, 10, 3}, {55, 13, 2}, {10, 52, 3}};   /* x, z, radius */
     int i;
     l = 256 - (r2 * 256) / (46 * 46) + ((vnoise(x, z, 3, 7) - 128) * 5) / 4 + (vnoise(x + 3, z + 40, 4, 12) - 128) / 2;
     for (i = 0; i < 3; i++) {
@@ -91,18 +80,18 @@ static int height_at(int x, int z, int bi)
 {
     int l = land_at(x, z), h, mx = x - MOUNT_X, mz = z - MOUNT_Z, md = mx * mx + mz * mz;
     if (l <= 0) {
-        h = SEA - 1 + l / 50;                         /* (the sea floor falls away from the coast) */
+        h = SEA - 1 + l / 50;                         /* the sea floor falls away from the coast */
         if (h < 2) h = 2;
         return h;
     }
-    h = SEA + (l + 40) / 100;                         /* (low coasts, rising slowly inland) */
+    h = SEA + (l + 40) / 100;                         /* low coasts, rising slowly inland */
     if (bi == B_ROCKY) h += (vnoise(x, z, 2, 13) * 4) >> 8;
     else if (bi == B_FOREST) h += (vnoise(x, z, 3, 14) * 3) >> 8;
     else h += (vnoise(x, z, 3, 15) * 2) >> 8;
-    if (md < 16 * 16) h += ((16 * 16 - md) * 9) / (16 * 16);   /* (the mountain) */
+    if (md < 16 * 16) h += ((16 * 16 - md) * 9) / (16 * 16);   /* the mountain */
     {
         int lx = x - LAKE_X, lz = z - LAKE_Z, ld = lx * lx * 2 + lz * lz;
-        if (ld < 9 * 9) h = SEA - 1 - (9 * 9 - ld) / 40;       /* (the lake, at sea level) */
+        if (ld < 9 * 9) h = SEA - 1 - (9 * 9 - ld) / 40;       /* the lake, at sea level */
         else if (ld < 11 * 11 && h > SEA) h = SEA;
     }
     if (h > WH - 7) h = WH - 7;
@@ -226,7 +215,7 @@ void col_update(int x, int z)
     }
 }
 
-s32 smoke_x, smoke_y, smoke_z, meadow_x, meadow_z;                    /* (Q8: the chimney's top, src/game.c puffs from it) */
+s32 smoke_x, smoke_y, smoke_z, meadow_x, meadow_z;                    /* Q8: the chimney's top, src/game.c puffs from it */
 
 /* a big round tree for the meadow's edge: a trunk of 5-6, a crown of 3 layers of radius 2 and a cap */
 static void round_tree(int x, int y, int z, int tall)
@@ -251,7 +240,7 @@ void world_gen(u32 seed)
     int x, z, y, cx, cz, ch = SEA + 3, best = -1, mx, mz, px, pz;
     seed_now = seed;
     gen_done = 0; surf_max = 0; ntree = 0;
-    /* (each column's biome once, kept in col_lo until the end: the noise is slow) */
+    /* each column's biome once, kept in col_lo until the end: the noise is slow */
     for (x = 0; x < WX; x++)
         for (z = 0; z < WZ; z++) { int bi = biome_at(x, z); col_lo[(x << 6) + z] = (u8)bi; hmap[(x << 6) + z] = (u8)height_at(x, z, bi); }
     /* the cabin: a flat, low spot in the south with the sea a few blocks away */
@@ -274,13 +263,13 @@ void world_gen(u32 seed)
                         if ((unsigned)qx >= WX || (unsigned)qz >= WZ) continue;
                         if (hmap[(qx << 6) + qz] < SEA) { d = isqrt(i * i + j * j); if (d < sea) sea = d; }
                     }
-                if (sea < 8 || sea > 16) continue;     /* (the shore in sight, not in the yard) */
+                if (sea < 8 || sea > 16) continue;     /* the shore in sight, not in the yard */
                 sc = 100 - (hi - lo) * 4 - (hi - SEA) * 12 - (sea - 10) * (sea - 10);
                 if (BIOME(ax + 3, az) == B_ROCKY) sc -= 40;
                 if (sc > best) { best = sc; ch = (lo + hi + 1) / 2 + 1; cx = ax; cz = az; }
             }
     }
-    ch = SEA + 2;                                 /* (the cabin's ground 1 above the beach: lowland by the shore, the land rising behind) */
+    ch = SEA + 2;                                 /* the cabin's ground 1 above the beach: lowland by the shore, the land rising behind */
     /* the meadow: the ground round the cabin eased to its level, soft at the rim (12 blocks) */
     mx = cx + 3; mz = cz - 4;
     meadow_x = mx * 256 + 128; meadow_z = mz * 256 + 128;
@@ -289,8 +278,8 @@ void world_gen(u32 seed)
             int dx = x - mx, dz = z - mz, r2 = dx * dx + dz * dz, w, h = hmap[(x << 6) + z];
             if (r2 >= 18 * 18) continue;
             w = r2 <= 9 * 9 ? 256 : (18 * 18 - r2) * 256 / (18 * 18 - 9 * 9);
-            if (h < SEA) continue;                    /* (the meadow keeps its beach and sea) */
-            if (h < ch - 1 && r2 > 7 * 7) continue;   /* (and slopes down to them: only the cabin's yard is filled up) */
+            if (h < SEA) continue;                    /* the meadow keeps its beach and sea */
+            if (h < ch - 1 && r2 > 7 * 7) continue;   /* and slopes down to them: only the cabin's yard is filled up */
             h = (h * (256 - w) + (ch - 1) * w + 128) >> 8;
             hmap[(x << 6) + z] = (u8)h;
         }
@@ -303,7 +292,7 @@ void world_gen(u32 seed)
                     int i = pass & 1 ? (WX - 1 - x) : x, j = pass & 2 ? (WZ - 1 - z) : z;
                     int dx = i - mx, dz = j - mz, h = hmap[(i << 6) + j], m;
                     if (dx * dx + dz * dz >= 26 * 26 || h < SEA) continue;
-                    m = 99;                           /* (the lowest land beside it: the sea's edge may stay steep, the islets keep their shape) */
+                    m = 99;                           /* the lowest land beside it: the sea's edge may stay steep, the islets keep their shape */
                     if (hmap[((i - 1) << 6) + j] >= SEA - 1 && hmap[((i - 1) << 6) + j] < m) m = hmap[((i - 1) << 6) + j];
                     if (hmap[((i + 1) << 6) + j] >= SEA - 1 && hmap[((i + 1) << 6) + j] < m) m = hmap[((i + 1) << 6) + j];
                     if (hmap[(i << 6) + j - 1] >= SEA - 1 && hmap[(i << 6) + j - 1] < m) m = hmap[(i << 6) + j - 1];
@@ -379,7 +368,7 @@ void world_gen(u32 seed)
             int bi = r2 < 16 * 16 ? B_PLAINS : BIOME(x, z);
             int fl = r2 < 16 * 16 ? 16 : bi == B_PLAINS ? 10 : bi == B_FOREST ? 3 : 0, gr = r2 < 16 * 16 ? 40 : bi == B_PLAINS ? 30 : bi == B_FOREST ? 18 : 5;
             if (h + 1 >= WH || CELL(x, h, z) != GRASS || CELL(x, h + 1, z)) continue;
-            if (dx >= -1 && dx <= 1 && dz >= 1 && dz <= 3) continue;      /* (the yard before the door) */
+            if (dx >= -1 && dx <= 1 && dz >= 1 && dz <= 3) continue;      /* the yard before the door */
             if (v < fl) put(x, h + 1, z, FLOWER);
             else if (v < fl + gr) put(x, h + 1, z, TALLGRASS);
         }

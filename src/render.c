@@ -12,13 +12,8 @@
 #include "tex.h"
 #include "recip.h"
 #define RECIP(z) ((u32)(z) < 4096 ? (s32)recip_tab[z] : (FOC << 16) / (z))
-#ifdef HOST
-u32 *tex_host;
-#define TEXB ((const u32 *)tex_host + 1)
-#else
 extern const u32 tex_bin[];
 #define TEXB (tex_bin + 1)
-#endif
 static u16 hoff[TEX_HMAX + 2];
 
 s32 cam_x, cam_y, cam_z;
@@ -27,28 +22,17 @@ s32 sel_x, sel_y, sel_z, sel_on, sel_crack;
 s32 frame_no, water_view;
 u32 *fb_l, *fb_r;
 s32 cube_detail, cube_tilt;
-#ifdef HOST
-#define PT 0
-#else
-extern volatile unsigned int pcm_time;
-#define PT pcm_time
-#endif
-u32 prof[8];
 
 #define CX4 (192 * 16)
 #define CY4 (112 * 16)
 #define NEAR 40
 #ifndef NEAR_WIDE
-#define NEAR_WIDE 1                               /* (near faces two columns a step too: 12 % faster, slightly coarser) */
+#define NEAR_WIDE 1                               /* near faces two columns a step too: faster, slightly coarser */
 #endif
 #ifndef TOP_SINGLE
 #define TOP_SINGLE 12
 #endif
-#ifdef CINEMA
-#define TEXD (12 * 256)                          /* (faces nearer than this textured: the video mode sees more) */
-#else
 #define TEXD (6 * 256)
-#endif
 #define FAR_TWO (4 * 256)                         /* faces past this: two columns a step */
 #define FAR_ONE (3 * 256)                         /* faces past this: one disparity for the whole face */
 #define EYE 15                                    /* half the eyes' distance, Q8 */
@@ -98,7 +82,7 @@ static void make_tex(void)
                 u32 w = 0;
                 for (r = 0; r < 16; r++) {
                     int v = l + tex_ofs[t][c][r], s;
-                    if (t != T_FLAT && l < 6) v = l + (tex_ofs[t][c][r] * l) / 6;   /* (texture fades with the light) */
+                    if (t != T_FLAT && l < 6) v = l + (tex_ofs[t][c][r] * l) / 6;   /* texture fades with the light */
                     if (v < 0) v = 0;
                     if (v > 48) v = 48;
                     s = v >> 4;
@@ -143,7 +127,7 @@ static const Look looks[NBLOCK][3] = {        /* top, side, bottom */
     {{T_FLAT, 44, D_WOOL, 0}, {T_FLAT, 43, D_WOOL, 0}, {T_FLAT, 43, D_WOOL, 0}},       /* wool */
     {{T_FLAT, 36, 0, 0}, {T_FLAT, 36, 0, 0}, {T_FLAT, 36, 0, 0}},                    /* flower (drawn as a plant) */
     {{T_FLAT, 34, 0, 0}, {T_FLAT, 34, 0, 0}, {T_FLAT, 34, 0, 0}},                    /* tall grass */
-    {{T_FLAT, 34, 0, 0}, {T_FLAT, 34, 0, 0}, {T_FLAT, 34, 0, 0}},                    /* (the sword: an item) */
+    {{T_FLAT, 34, 0, 0}, {T_FLAT, 34, 0, 0}, {T_FLAT, 34, 0, 0}},                    /* the sword: an item */
 };
 static const u8 dir_shade[6] = {165, 165, 128, 256 - 1, 210, 210};   /* /256: Minecraft's face shading, z brighter than x */
 
@@ -178,7 +162,7 @@ const s16 sin_tab[1024 + 256] = {
 };
 
 /* ---- framebuffer spans */
-static u32 mfrom[17], mto[17];                     /* (bits of rows >= k / < k in a word) */
+static u32 mfrom[17], mto[17];                     /* bits of rows >= k / < k in a word */
 
 static void span(u32 *__restrict__ col, int a, int b, u32 p)
 {
@@ -193,8 +177,6 @@ static void span(u32 *__restrict__ col, int a, int b, u32 p)
 
 /* ---- polygon fill */
 typedef struct { s32 x, y, z, u, v; } CV;          /* camera space Q8, face u v Q8 */
-u32 st_faces, st_cols, st_cells, st_colsv, st_words, st_polys, st_bucket[8], st_pbucket[8];
-static s32 cur_zmin;
 
 /* a face's look for this picture */
 typedef struct {
@@ -207,7 +189,7 @@ typedef struct {
 
 /* one side of the polygon (top or bottom), walked column by column: y in rows Q16 (+ the rounding) */
 typedef struct { s32 y, dy, u, du, cend, thick; int i, step, last; } Chain;
-static Chain gt, gb;                               /* (globals: the loops keep their copies in registers) */
+static Chain gt, gb;                               /* globals: the loops keep their copies in registers */
 static const s32 *gxs, *gys, *gus;
 static int gn;
 
@@ -283,13 +265,9 @@ static const u32 ones8[8] = {~0u, ~0u, ~0u, ~0u, ~0u, ~0u, ~0u, ~0u}, door_none[
 
 /* both eyes, plain */
 #define BSTEP pB += 16
-u32 st_px, st_kind[8];
 static void __attribute__((noinline)) seg2(u32 *pA, u32 *pB, int n, s32 ty, s32 tdy, s32 by, s32 bdy, const u32 *pat, int k)
 {
     SEG_HEAD
-#ifdef HOST
-        st_px += 2 * (b - a);
-#endif
         P = pat[k];
         if (wa == wb) { u32 m = ma & mb; PUT(pA, wa, P, m); PUT(pB, wa, P, m); }
         else {
@@ -328,9 +306,6 @@ static void __attribute__((noinline)) seg2w(u32 *pA, u32 *pB, int n, s32 ty, s32
         if (a < 0) a = 0;
         if (b > VH) b = VH;
         if (a >= b) continue;
-#ifdef HOST
-        st_px += 4 * (b - a);
-#endif
         wa = a >> 4; wb = (b - 1) >> 4;
         ma = 0xFFFFFFFFu << ((a & 15) << 1);
         mb = 0xFFFFFFFFu >> ((15 - ((b - 1) & 15)) << 1);
@@ -359,9 +334,6 @@ static void __attribute__((noinline)) seg2w(u32 *pA, u32 *pB, int n, s32 ty, s32
 static void __attribute__((noinline)) seg1(u32 *pA, int n, s32 ty, s32 tdy, s32 by, s32 bdy, const u32 *pat, const u32 *door, int k)
 {
     SEG_HEAD
-#ifdef HOST
-        st_px += (b - a);
-#endif
         u32 D = door[k];
         P = pat[k];
         if (wa == wb) { u32 m = ma & mb & D; PUT(pA, wa, P, m); }
@@ -375,67 +347,16 @@ static void __attribute__((noinline)) seg1(u32 *pA, int n, s32 ty, s32 tdy, s32 
     }
 }
 /* one eye or both (pB 0), outlined: the top tt rows and bottom bt rows in E; body through door */
-#ifdef HOST
-static void __attribute__((noinline)) seg_e(u32 *pA, u32 *pB, int n, s32 ty, s32 tdy, s32 by, s32 bdy, const u32 *pat, const u32 *ep,
-    const u32 *door, int k, int tt, int bt)
-{
-    for (; n > 0; n--, pA += 16, k = (k + 1) & 7) {
-        int a = ty >> 16, b = by >> 16, ra = a, rb = b, wa, wb, ka, kb;
-        u32 P, E, D, ma, mb, et, eb;
-        ty += tdy; by += bdy;
-        if (a < 0) a = 0;
-        if (b > VH) b = VH;
-        if (a >= b) { if (pB) pB += 16; continue; }
-    #ifdef HOST
-    st_px += (b - a) * (pB ? 2 : 1);
-#endif
-        wa = a >> 4; wb = (b - 1) >> 4; ka = a & 15; kb = ((b - 1) & 15) + 1;
-        P = pat[k]; E = ep[k]; D = door[k];
-        ma = 0xFFFFFFFFu << (ka << 1);
-        mb = 0xFFFFFFFFu >> ((16 - kb) << 1);
-        et = a == ra ? ma & (ka + tt >= 16 ? 0xFFFFFFFFu : 0xFFFFFFFFu >> ((16 - ka - tt) << 1)) : 0;
-        eb = b == rb ? mb & (kb - bt <= 0 ? 0xFFFFFFFFu : 0xFFFFFFFFu << ((kb - bt) << 1)) : 0;
-        if (wa == wb) {
-            u32 m = ma & mb, e = (et | eb) & m, f = m & D & ~e, val = (P & f) | (E & e);
-            m = f | e;
-            PUT(pA, wa, val, m);
-            if (pB) PUT(pB, wa, val, m);
-        } else {
-            int w;
-            u32 f = ma & D & ~et, val = (P & f) | (E & et), m = f | et;
-            PUT(pA, wa, val, m);
-            if (pB) PUT(pB, wa, val, m);
-            for (w = wa + 1; w < wb; w++) { PUT(pA, w, P, D); if (pB) PUT(pB, w, P, D); }
-            f = mb & D & ~eb; val = (P & f) | (E & eb); m = f | eb;
-            PUT(pA, wb, val, m);
-            if (pB) PUT(pB, wb, val, m);
-        }
-        if (pB) pB += 16;
-    }
-}
-
-/* (the PC's stand-in for src/seg.s seg_ew: two columns a step, both written the same) */
-static void seg_ew(u32 *pA, u32 *pB, int n, s32 ty, s32 tdy, s32 by, s32 bdy, const u32 *pat, const u32 *ep, const u32 *door, int k, int tt, int bt)
-{
-    for (; n > 0; n -= 2, pA += 32, pB = pB ? pB + 32 : 0, ty += tdy, by += bdy, k += 2) {
-        seg_e(pA, pB, 1, ty, 0, by, 0, pat, ep, door, k & 7, tt, bt);
-        seg_e(pA + 16, pB ? pB + 16 : 0, 1, ty, 0, by, 0, pat, ep, door, k & 7, tt, bt);
-    }
-}
-#else
 void seg_e(u32 *pA, u32 *pB, int n, s32 ty, s32 tdy, s32 by, s32 bdy, const u32 *pat, const u32 *ep, const u32 *door, int k, int tt, int bt);   /* src/seg.s */
 void seg_ew(u32 *pA, u32 *pB, int n, s32 ty, s32 tdy, s32 by, s32 bdy, const u32 *pat, const u32 *ep, const u32 *door, int k, int tt, int bt);
-#endif
 
 /* textured columns: the face's rows [ra, rb) from the pre-scaled column of texel u and height rb - ra */
-#ifndef HOST
 void seg_tex_a(u32 *pA, u32 *pB, int n, s32 ty, s32 tdy, s32 by, s32 bdy, s32 tu, s32 tdu, const u32 *base, const u16 *hoffs, int key);
-void seg_tex_aw(u32 *pA, u32 *pB, int n, s32 ty, s32 tdy, s32 by, s32 bdy, s32 tu, s32 tdu, const u32 *base, const u16 *hoffs, int key);   /* (two columns a step) */   /* src/seg.s */
-#endif
+void seg_tex_aw(u32 *pA, u32 *pB, int n, s32 ty, s32 tdy, s32 by, s32 bdy, s32 tu, s32 tdu, const u32 *base, const u16 *hoffs, int key);   /* two columns a step */   /* src/seg.s */
 /* one textured column, any height: rows [ra, rb) of texel column u. Up to TEX_HMAX rows from its pre-scaled column; taller
    (a face right in front of the eye) from the column of half (a quarter) the height with each row doubled (4 times), a word
    at a time through spread tables, so the ROM keeps only heights up to TEX_HMAX (2 MB) */
-static u32 spread2[256], spread4[256];             /* (4 pixels -> each twice: 16 bits; -> each 4 times: 32 bits) */
+static u32 spread2[256], spread4[256];             /* 4 pixels -> each twice: 16 bits; -> each 4 times: 32 bits */
 static void tex_col(u32 *pA, u32 *qB, int ra, int rb, int u, const u32 *base, int key)
 {
     int a = ra, b = rb, h = rb - ra, wa, wb, w, f = 1, hh;
@@ -449,7 +370,7 @@ static void tex_col(u32 *pA, u32 *qB, int ra, int rb, int u, const u32 *base, in
     src = base + (u & 15) * (TEX_PER / 16) + hoff[hh];
     wa = a >> 4; wb = (b - 1) >> 4;
     for (w = wa; w <= wb; w++) {
-        int p = (w << 4) - ra, q = p < 0 ? 0 : p;           /* (output row of this word's first row; from row q on) */
+        int p = (w << 4) - ra, q = p < 0 ? 0 : p;           /* output row of this word's first row; from row q on */
         int s0 = q / f, j = s0 >> 4, sh = (s0 & 15) << 1, r;
         u32 v, m = 0xFFFFFFFFu, x = sh ? (src[j] >> sh) | (src[j + 1] << (32 - sh)) : src[j];
         if (f == 1) v = x;
@@ -464,7 +385,7 @@ static void tex_col(u32 *pA, u32 *qB, int ra, int rb, int u, const u32 *base, in
         if (p < 0) v <<= (-p) << 1;
         if (w == wa) m = 0xFFFFFFFFu << ((a & 15) << 1);
         if (w == wb) m &= 0xFFFFFFFFu >> ((15 - ((b - 1) & 15)) << 1);
-        if (key) { u32 nz = (v | (v >> 1)) & 0x55555555u; m &= nz | (nz << 1); }   /* (plants: shade 0 is see-through) */
+        if (key) { u32 nz = (v | (v >> 1)) & 0x55555555u; m &= nz | (nz << 1); }   /* plants: shade 0 is see-through */
         if (m == 0xFFFFFFFFu) { pA[w] = v; if (qB) qB[w] = v; }
         else { PUT(pA, w, v, m); if (qB) PUT(qB, w, v, m); }
     }
@@ -473,24 +394,20 @@ static void tex_col(u32 *pA, u32 *qB, int ra, int rb, int u, const u32 *base, in
 static void __attribute__((noinline)) seg_tex_c(u32 *pA, u32 *pB, int n, s32 ty, s32 tdy, s32 by, s32 bdy, s32 tu, s32 tdu, const u32 *base, int key)
 {
     for (; n > 0; n--, pA += 16, ty += tdy, by += bdy, tu += tdu) {
-        tex_col(pA, pB, ty >> 16, by >> 16, tu >> 16, base, key);   /* (u & 15: a merged run repeats the texture) */
+        tex_col(pA, pB, ty >> 16, by >> 16, tu >> 16, base, key);   /* u & 15: a merged run repeats the texture */
         if (pB) pB += 16;
     }
 }
 
 static void seg_tex(u32 *pA, u32 *pB, int n, s32 ty, s32 tdy, s32 by, s32 bdy, s32 tu, s32 tdu, const u32 *base, int key)
 {
-#ifndef HOST
     seg_tex_a(pA, pB, n, ty, tdy, by, bdy, tu, tdu, base, hoff, key); return;
-#endif
     seg_tex_c(pA, pB, n, ty, tdy, by, bdy, tu, tdu, base, key);
 }
 
 /* texture rectangles and the grass lip (near faces only): a second pass over the columns */
-u32 st_deco;
 static void deco_pass(int cs, int ce, u32 *fA, u32 *fB, const Style *st, int ph)
 {
-    st_deco += ce - cs;
     s32 ty, tdy, by, bdy, tu, tdu;
     int c, lines = st->lines_only;
     chain_set(&gt, cs); chain_set(&gb, cs);
@@ -571,16 +488,10 @@ static void fill_poly(const s32 *xs, const s32 *ys, const s32 *us, int n, const 
 static void fill_core(const s32 *xs, const s32 *ys, const s32 *us, int n, const Style *st, u32 *fbA, int offA, u32 *fbB, int offB, int ph, int far, int clo, int chi, int area, int L, int R)
 {
     int c0, c1, cs, ce, lo, hi;
-#ifdef NO_LOOP
-    return;
-#endif
     c0 = (xs[L] + 7) >> 4; c1 = (xs[R] + 7) >> 4;
     lo = clo; hi = chi;
     cs = c0 < lo ? lo : c0; ce = c1 > hi ? hi : c1;
     if (cs >= ce) return;
-#ifdef HOST
-    st_polys++;
-#endif
     gxs = xs; gys = ys; gus = st->rects || st->deco == D_GRASS || st->texv >= 0 ? us : 0; gn = n;
     gt.i = L; gt.last = R; gt.step = area > 0 ? 1 : -1;
     gb.i = L; gb.last = R; gb.step = -gt.step;
@@ -605,27 +516,19 @@ static void fill_core(const s32 *xs, const s32 *ys, const s32 *us, int n, const 
                 else if (e > c1 - 1) e = c1 - 1;
             }
             n = e - c;
-            /* (the pair loops write columns two at a time: a run that ends the face or the clip on an odd count leaves its
-               last column to the next step, else the right eye's column 384 lands in the height table after it) */
+            /* the pair loops write columns two at a time: a run that ends the face or the clip on an odd count leaves its
+               last column to the next step, else the right eye's column 384 lands in the height table after it */
             if (n > 1 && (n & 1) && e == ce) { n--; e--; }
-#ifdef HOST
-            st_cols += fB ? 2 * n : n; st_words++;
-#endif
             w2 = wide && n > 1;
             pb = fB ? fB + c * 16 : 0;
-#ifdef HOST
-            st_kind[st->texv >= 0 ? 0 : ep ? 1 : w2 && !st->door ? 2 : fB ? (st->door ? 3 : 4) : 5] += fB ? 2 * n : n;
-#endif
             {
             if (st->texv >= 0) {
                 if (((gb.y - gt.y) >> 16) > TEX_HMAX || ((gb.y + gb.dy * (n - 1) - gt.y - gt.dy * (n - 1)) >> 16) > TEX_HMAX)
                     seg_tex_c(fA + c * 16, pb, n, gt.y, gt.dy, gb.y, gb.dy, gt.u, gt.du, TEXB + st->texv * TEX_PER, st->key);
                 else
-#ifndef HOST
                 if ((far || NEAR_WIDE) && n > 1)
                     seg_tex_aw(fA + c * 16, pb, n, gt.y, gt.dy << 1, gb.y, gb.dy << 1, gt.u, gt.du << 1, TEXB + st->texv * TEX_PER, hoff, st->key);
                 else
-#endif
                 seg_tex(fA + c * 16, pb, n, gt.y, gt.dy, gb.y, gb.dy, gt.u, gt.du, TEXB + st->texv * TEX_PER, st->key);
             }
             else if (ep) {
@@ -717,11 +620,7 @@ static int clip_plane(CV *in, int n, CV *out, int pl)
 static void draw_proj(const s32 *xs, const s32 *ys, const s32 *ds, const s32 *us, int n, s32 zmin, s32 dsum, const Style *st, int ph_extra)
 {
     s32 xe[12];
-    int i, ph = (dsum / n + 8) >> 4;              /* (the texture's shift: the face's mean disparity) */
-    u32 t0 = PT;
-#ifdef NO_FILL
-    return;
-#endif
+    int i, ph = (dsum / n + 8) >> 4;              /* the texture's shift: the face's mean disparity */
     if (zmin >= FAR_ONE)                          /* far enough: one walk, both eyes, the face's mean disparity */
         fill_poly(xs, ys, us, n, st, fb_l, ph, fb_r, -ph, ph_extra, zmin >= FAR_TWO);
     else {
@@ -730,7 +629,6 @@ static void draw_proj(const s32 *xs, const s32 *ys, const s32 *ds, const s32 *us
         for (i = 0; i < n; i++) xe[i] = xs[i] - ds[i];
         fill_poly(xe, ys, us, n, st, fb_r, 0, 0, 0, ph + ph_extra, 0);
     }
-    prof[4] += PT - t0;
 }
 
 /* draw a polygon given in camera space (clipped as needed) */
@@ -741,7 +639,6 @@ static void draw_cv(CV *v, int n, const Style *st, int ph_extra)
     int i, oa = 0xFF, oo = 0;
     for (i = 0; i < n; i++) { int o = outcode(&v[i]); oa &= o; oo |= o; }
     if (oa & (OC_NEAR | OC_L | OC_R | OC_T | OC_B)) return;
-    st_words++;
     if (oo & (OC_NEAR | OC_GUARD)) {
         n = clip_plane(v, n, b1, 0);
         if (oo & OC_GUARD) {
@@ -826,7 +723,7 @@ static void sky_fill(u32 *__restrict__ fb)
 {
     int k;
     for (k = 0; k < 8; k++) {
-        /* (a phase's 14 words in registers, stored into every 8th column: a load per word costs 5 instructions) */
+        /* a phase's 14 words in registers, stored into every 8th column: a load per word costs 5 instructions */
         const u32 *s = sky_col[k];
         u32 a0 = s[0], a1 = s[1], a2 = s[2], a3 = s[3], a4 = s[4], a5 = s[5], a6 = s[6];
         u32 a7 = s[7], a8 = s[8], a9 = s[9], a10 = s[10], a11 = s[11], a12 = s[12], a13 = s[13];
@@ -865,7 +762,7 @@ static void sky_things(void)
     /* clouds: flat slabs high up, drifting */
     for (i = 0; i < 12; i++) {
         u32 h = hsh(i * 131 + 7);
-        /* (world-anchored in a field of 256 blocks that wraps round the camera) */
+        /* world-anchored in a field of 256 blocks that wraps round the camera */
         s32 x = (s32)(h & 0xFFFF) + frame_no * 2 - cam_x, z = (s32)((h >> 16) & 0xFFFF) - cam_z;
         s32 w = 1024 + (s32)((h >> 12) & 3) * 768, d = 768 + (s32)((h >> 14) & 3) * 512;
         x = ((x + 32768) & 65535) - 32768; z = ((z + 32768) & 65535) - 32768;
@@ -879,15 +776,9 @@ static const u8 fc[6][4] = {{6, 2, 0, 4}, {3, 7, 5, 1}, {0, 1, 5, 4}, {6, 7, 3, 
 static const s32 fu[4] = {0, 256, 256, 0}, fv[4] = {0, 0, 256, 256};
 static s32 sxv[3], syv[3], szv[3];                /* Q22 a block along x y z, in camera space */
 
-#ifdef CINEMA
-#define FOG0 (10 * 256)
-#define FOG1 (46 * 256)
-#define FOGS 7                                    /* (fog_tab: a step of 1 << FOGS: 128 steps reach FOGS = 7: 64 blocks) */
-#else
 #define FOG0 (6 * 256)
 #define FOG1 (30 * 256)
 #define FOGS 6
-#endif
 #define FOGI(z) ((z) >= (127 << FOGS) ? 255 : fog_tab[(z) >> FOGS])
 #define FOG_L 35
 
@@ -905,7 +796,7 @@ static void world_tables(void)
         }
     for (i = 0; i < 128; i++) {
         s32 z = i << FOGS, f = z <= FOG0 ? 0 : z >= FOG1 ? 256 : ((z - FOG0) << 8) / (FOG1 - FOG0);
-        f = (f * (512 - f)) >> 10;                /* (eased: far hills and shores keep their shape, at most 1/2 haze) */
+        f = (f * (512 - f)) >> 10;                /* eased: far hills and shores keep their shape, at most 1/2 haze */
         fog_tab[i] = (u8)(f > 255 ? 255 : f);
     }
     for (i = 0; i < WH; i++) out_col[i] = (u8)(i < 3 ? BEDROCK : i < SEA ? WATER : AIR);
@@ -920,7 +811,7 @@ static void face_style(Style *st, int t, int dir, s32 z, int sel)
     st->pat = &lev_pat[(z < TEXD || dir == 3) && z < TEXD + 3 * 256 ? lk->tex : (lk->tex == T_LEAVES || lk->tex == T_WATER ? lk->tex : T_FLAT)][lev][0];
     st->door = lk->door == 1 ? door_mask[0] : lk->door == 3 ? door_mask[2] : 0;
     st->lines_only = lk->door == 9;
-    st->rects = z < TEXD && (lk->deco == D_GLASS || (dir != 2 && dir != 3)) ? deco_rects[lk->deco] : 0;   /* (tops: no seams, they don't map there) */
+    st->rects = z < TEXD && (lk->deco == D_GLASS || (dir != 2 && dir != 3)) ? deco_rects[lk->deco] : 0;   /* tops: no seams, they don't map there */
     if (t == GRASS && dir != 3 && dir != 2 && z >= TEXD) st->deco = 0;
     st->edge = 0;
     if (z < 8 * 256 || st->lines_only || sel) {
@@ -931,12 +822,6 @@ static void face_style(Style *st, int t, int dir, s32 z, int sel)
         if (sel) e = ((frame_no >> 1) & 8) ? 48 : 40;
         st->edge = &lev_pat[T_FLAT][e][0];
     }
-#ifdef X_NOEDGE
-    if (!st->lines_only && !sel) st->edge = 0;
-#endif
-#ifdef X_NODECO
-    st->rects = 0; if (st->deco == D_GRASS) st->deco = 0;
-#endif
     st->texv = -1; st->key = 0;
     if (z < TEXD && dir != 2 && dir != 3 && tex_var[t] >= 0 && !(sel && sel_crack)) {
         st->texv = tex_var[t] + (dir < 2);
@@ -958,7 +843,6 @@ static void draw_faces(int t, const int *dirs, int nd, s32 bx, s32 by, s32 bz, i
     u8 oc[8];
     int have = 0, i, d, need = 0;
     s32 cz = (bz + ((sxv[2] + syv[2] + szv[2]) >> 1)) >> 14;
-    st_faces += nd;
     for (d = 0; d < nd; d++) need |= (1 << fc[dirs[d]][0]) | (1 << fc[dirs[d]][1]) | (1 << fc[dirs[d]][2]) | (1 << fc[dirs[d]][3]);
     for (i = 0; i < 8; i++) {
         s32 px, py, pz, o = 0;
@@ -974,7 +858,7 @@ static void draw_faces(int t, const int *dirs, int nd, s32 bx, s32 by, s32 bz, i
         cx_[i] = px; cy_[i] = py; cz_[i] = pz;
         if (pz < NEAR) o = OC_NEAR;
         else {
-            s32 g = (pz << 3) + (pz << 2);          /* (12 z: the guard band) */
+            s32 g = (pz << 3) + (pz << 2);          /* 12 z: the guard band */
             if (px > g || px < -g || py > g || py < -g) o = OC_GUARD;
             else {
                 /* the frustum's codes from the projected point itself: no multiplies */
@@ -1017,7 +901,7 @@ static void draw_faces(int t, const int *dirs, int nd, s32 bx, s32 by, s32 bz, i
 /* the columns round the camera in falling Manhattan distance (a valid back-to-front order for a grid of cubes) */
 #define NRING 640
 static s8 ring_dx[NRING], ring_dz[NRING];
-static s16 ring_of[(2 * VIEW_R + 1) * (2 * VIEW_R + 1)];   /* (a column offset's place in the ring order) */
+static s16 ring_of[(2 * VIEW_R + 1) * (2 * VIEW_R + 1)];   /* a column offset's place in the ring order */
 static int nring;
 
 static void make_rings(void)
@@ -1041,13 +925,13 @@ static void make_rings(void)
     }
 }
 
-static int show(int n, int t)                     /* (does a face toward neighbour n show) */
+static int show(int n, int t)                     /* does a face toward neighbour n show */
 {
     return !OPAQUE(n) && n != t;
 }
 
 /* the sea: one plane (the water blocks' tops and the endless ocean), drawn between the layers under it and over it */
-static int sea_near;                               /* (sea-level water in the near ring: the plane is needed) */
+static int sea_near;                               /* sea-level water in the near ring: the plane is needed */
 static void water_plane(void)
 {
     if (!sea_near) return;
@@ -1071,12 +955,7 @@ static void water_plane(void)
    and within a layer the top faces never hide its side faces. So: the layers below the camera bottom up, each one's side
    faces back to front (ring order) and then its top faces, merged into rectangles of one block type and distance band;
    the layers above top down with their bottom faces; the camera's own layer last. The traversal files cells by layer. */
-#ifdef CINEMA
-#define NREC 2400
-#else
 #define NREC 1400
-#endif
-u32 st_recfull;                                   /* (pictures that ran out of records) */
 #define GW (2 * VIEW_R + 3)
 static u8 rec_x[NREC], rec_z[NREC], rec_t[NREC], rec_f[NREC];
 static s16 rec_next[NREC], lay_head[WH], lay_tail[WH], rec_ring[NREC];
@@ -1109,7 +988,7 @@ static void plant_quad(s32 wx, s32 wy, s32 wz, s32 half, s32 high, int t)
     {
         int ca = (x0 + 7) >> 4, cb = (x1 + 7) >> 4;
         s32 du = (16 << 16) / ((x1 - x0) >> 4 ? (x1 - x0) >> 4 : 1);
-        if (ca < d) ca = d;                         /* (the right eye at ca - d: exactly on screen) */
+        if (ca < d) ca = d;                         /* the right eye at ca - d: exactly on screen */
         if (cb > VW + d) cb = VW + d;
         if (ca < -d - GUARD + 4) ca = -d - GUARD + 4;
         if (cb > VW - d + GUARD - 4) cb = VW - d + GUARD - 4;
@@ -1146,9 +1025,8 @@ static void collect(int under_r2)
         k = (wx << 6) + wz;
         lo = col_lo[k]; hi = col_hi[k];
         d2 = dx * dx + dz * dz;
-        if (d2 > under_r2 && lo < SEA - 1) lo = SEA - 1;   /* (deep water is murky: its floor only near) */
+        if (d2 > under_r2 && lo < SEA - 1) lo = SEA - 1;   /* deep water is murky: its floor only near */
         if (lo > hi) continue;
-        st_cells++;
         px = (wx << 8) + 128 - cam_x; pz = (wz << 8) + 128 - cam_z;
         ylo = (lo << 8) - cam_y; yhi = ((hi + 1) << 8) - cam_y;
         e = lnx * px + lnz * pz + le + (lny > 0 ? lny * yhi : lny * ylo);
@@ -1176,14 +1054,13 @@ static void collect(int under_r2)
                 f = F_TOP;
             } else if (PLANT(t)) { if (d2 <= VIEW_R * VIEW_R) f = F_BB; }
             else {
-            st_colsv++;
             if (xf && show(nx[y], t)) f |= xf;
             if (zf && show(nz[y], t)) f |= zf;
             if (y < ccy) { if (y + 1 >= WH || show(cl[y + 1], t)) f |= F_TOP; }
             else if (y > ccy) { if (y > 0 && show(cl[y - 1], t)) f |= F_BOT; }
             }
             if (!f) continue;
-            if (nrec >= NREC) { st_recfull++; continue; }
+            if (nrec >= NREC) continue;
             rec_x[nrec] = (u8)wx; rec_z[nrec] = (u8)wz; rec_t[nrec] = (u8)t; rec_f[nrec] = (u8)f; rec_ring[nrec] = (s16)i;
             rec_next[nrec] = -1;
             if (lay_tail[y] < 0) lay_head[y] = (s16)nrec; else rec_next[lay_tail[y]] = (s16)nrec;
@@ -1203,7 +1080,7 @@ static void cell_base(int x, int y, int z, s32 *bx, s32 *by, s32 *bz)
 /* one layer: side faces in ring order, then the top (tb 1) or bottom (tb 2) faces, merged past 4 blocks */
 /* ---- creatures: boxes turned by their heading, shaded, outlined, a face on the front of the head */
 #define MOBREC 255
-/* (u across the face 0-16, v down it 0-16; d: the level's change) */
+/* u across the face 0-16, v down it 0-16; d: the level's change */
 static const Rect r_pigface[] = {{2, 6, 4, 8, 8}, {3, 5, 5, 8, -30}, {10, 14, 4, 8, 8}, {11, 13, 5, 8, -30}, {0, 255, 0, 0, 0}};
 static const Rect r_snout[] = {{3, 6, 5, 12, -24}, {10, 13, 5, 12, -24}, {0, 255, 0, 0, 0}};
 static const Rect r_sheepface[] = {{2, 6, 5, 8, 26}, {3, 5, 6, 8, 4}, {10, 14, 5, 8, 26}, {11, 13, 6, 8, 4}, {6, 10, 11, 14, 14}, {0, 255, 0, 0, 0}};
@@ -1263,11 +1140,11 @@ static void draw_mob_layer(int i, int y)
     s32 px[12], py[12], pz[12], pd[12];
     u8 pb[12];
     int bright = (m->hurt & 4) || (m->alive > 1 && (m->alive & 4));
-    if (m->type == M_BOOM && m->state == 2) {         /* (the fuse: swelling, flashing faster and faster) */
+    if (m->type == M_BOOM && m->state == 2) {         /* the fuse: swelling, flashing faster and faster */
         sc = 256 + (60 - m->timer) * 3 / 4;
         bright = (m->timer > 30 ? (m->timer & 8) : m->timer > 12 ? (m->timer & 4) : (m->timer & 2)) != 0;
     }
-    if (m->alive > 1) by -= (m->alive - 1) * 6;   /* (dying: it sinks away) */
+    if (m->alive > 1) by -= (m->alive - 1) * 6;   /* dying: it sinks away */
     for (b = mob_first[ty]; b < mob_first[ty + 1] && n < 12; b++) {
         const MobBox *k = &mob_boxes[b];
         s32 lx = k->x * 16, lz = k->z * 16, wy = by + k->y * 16, ly = 0;
@@ -1278,7 +1155,7 @@ static void draw_mob_layer(int i, int y)
         { s32 ex = px[n] - cam_x, ey = py[n] - cam_y, ez = pz[n] - cam_z; pd[n] = ex * ex + ey * ey + ez * ez; }
         n++;
     }
-    for (j = 0; j < n; j++) {                       /* (the farthest left, each time) */
+    for (j = 0; j < n; j++) {                       /* the farthest left, each time */
         int f = -1;
         for (k2 = 0; k2 < n; k2++) if (pd[k2] >= 0 && (f < 0 || pd[k2] > pd[f])) f = k2;
         {
@@ -1291,10 +1168,8 @@ static void draw_mob_layer(int i, int y)
 
 /* a run of n side faces in one plane (dir 0 1: along z, 4 5: along x) from the cell at base, one quad, the texture
    repeating a block */
-u32 st_runs, st_runcells;
 static void draw_run(int t, int dir, s32 bx, s32 by, s32 bz, int n, s32 cz)
 {
-    st_runs++; st_runcells += n;
     CV v[4];
     Style st;
     int i, alx = dir >= 4;
@@ -1320,7 +1195,7 @@ static s16 sgrid[GW * GW];
 static void draw_layer(int y, int tb)
 {
     int r, ccx = cam_x >> 8, ccz = cam_z >> 8, any = 0;
-    /* (the layer's cells by place, for runs of faces) */
+    /* the layer's cells by place, for runs of faces */
     for (r = lay_head[y]; r >= 0; r = rec_next[r]) if (rec_t[r] != MOBREC) sgrid[(rec_z[r] - ccz + VIEW_R + 1) * GW + rec_x[r] - ccx + VIEW_R + 1] = (s16)(r + 1);
     for (r = lay_head[y]; r >= 0; r = rec_next[r]) {
         int f = rec_f[r], dirs[3], nd = 0, x = rec_x[r], z = rec_z[r], sel, q;
@@ -1463,11 +1338,7 @@ static void prepare_world(void)
     b22x = -(rx * cam_x + rz * cam_z);
     b22y = -(ux * cam_x + uy * cam_y + uz * cam_z);
     b22z = -(fx * cam_x + fy * cam_y + fz * cam_z);
-#ifdef CINEMA
-    collect(VIEW_R * VIEW_R);
-#else
     collect(above ? 36 : VIEW_R * VIEW_R);
-#endif
     file_mobs();
 }
 
@@ -1477,107 +1348,39 @@ static s16 far_yb[192 + 2];
 static void draw_world(void)
 {
     int ccy = cam_y >> 8, y, above = cam_y > SEA * 256 - 16;
-    {
-        u32 t0 = PT;
-        u32 tf;
-        if (!above) { tf = PT; far_field(); far_trees(); prof[7] += PT - tf; }
-        for (y = 0; y < ccy && y < WH; y++) {
-            if (above && y == SEA - 1) { water_plane(); tf = PT; far_field(); far_trees(); prof[7] += PT - tf; }
-            draw_layer(y, 1);
-        }
-        if (above && ccy <= SEA - 1) { water_plane(); tf = PT; far_field(); far_trees(); prof[7] += PT - tf; }
-        for (y = WH - 1; y > ccy; y--) draw_layer(y, 2);
-        if (ccy >= 0 && ccy < WH) draw_layer(ccy, 0);
-        prof[5] += PT - t0;
+    if (!above) { far_field(); far_trees(); }
+    for (y = 0; y < ccy && y < WH; y++) {
+        if (above && y == SEA - 1) { water_plane(); far_field(); far_trees(); }
+        draw_layer(y, 1);
     }
+    if (above && ccy <= SEA - 1) { water_plane(); far_field(); far_trees(); }
+    for (y = WH - 1; y > ccy; y--) draw_layer(y, 2);
+    if (ccy >= 0 && ccy < WH) draw_layer(ccy, 0);
 }
 
 /* ---- the far field: the world past the near ring as a height field (hmap, surf_t: the surface's height and block),
    marched front to back per pair of screen columns (192 a picture) with a horizon buffer per pair, so a pixel is written
    at most once. Per depth step the rows of all 29 heights come from one table (29 divides a step, not one a sample);
    a visible stretch goes to both eyes at that depth's disparity. Rises get a darker top row: the hills' contours. */
-extern int surf_max;                               /* (the world's highest surface, src/world.c) */
+extern int surf_max;                               /* the world's highest surface, src/world.c */
 #define maxh (surf_max < WH ? surf_max + 1 : WH)
 #define FAR0 (2 * 256 + 128)
-#ifdef CINEMA
-#define FAR1 (46 * 256)
-#else
 #define FAR1 (30 * 256)
-#endif
 static s16 far_kq[192];
 static u8 far_hp[192 + 2];
-
-/* rows [a, b) of nc columns from col (pattern by column phase k), the top row in E if rim */
-static int far_tex;                                /* (far_put's pattern set: T_FLAT, or T_LEAVES for far crowns) */
-static void far_put(u32 *col, int nc, int k, int a, int b, int lv, int rim)
-{
-    int wa = a >> 4, wb = (b - 1) >> 4, w, i;
-    u32 ma = 0xFFFFFFFFu << ((a & 15) << 1), mb = 0xFFFFFFFFu >> ((15 - ((b - 1) & 15)) << 1);
-    u32 er = rim ? (3u << ((a & 15) << 1)) : 0;
-    const u32 *pat = &lev_pat[far_tex][lv][0], *ep = &lev_pat[T_FLAT][lv > 12 ? lv - 12 : 0][0];
-    for (i = 0; i < nc; i++, col += 16) {
-        u32 P = pat[(k + i) & 7], E = ep[(k + i) & 7];
-        if (wa == wb) { u32 m = ma & mb, v = (P & ~er) | (E & er); PUT(col, wa, v, m); continue; }
-        { u32 v = (P & ~er) | (E & er); PUT(col, wa, v, ma); }
-        for (w = wa + 1; w < wb; w++) col[w] = P;
-        PUT(col, wb, P, mb);
-    }
-}
 
 typedef struct { s32 x16, z16, dx16, dz16, pw; s16 *yb; u8 *hp; s16 *ytab; s32 ytop; const u8 *hm, *st; s32 ring, ccx, ccz, r2; u32 *ev; } FarStep;
 static u32 far_ev[2 * 192];
 #define FAR_NS 12
-static u8 far_hist[FAR_NS][192];                   /* (the horizon per pair after each step: what hides a far tree) */
+static u8 far_hist[FAR_NS][192];                   /* the horizon per pair after each step: what hides a far tree */
 static s32 far_d[FAR_NS];
 static int far_ns;
 
-#ifdef HOST
-static int far_step(FarStep *f)
-{
-    int p, n = 0;
-    s32 x16 = f->x16, z16 = f->z16;
-    for (p = 0; p < 192; p += f->pw, x16 += f->dx16, z16 += f->dz16) {
-        int ix = x16 >> 16, iz = z16 >> 16, i, h, y;
-        if (f->yb[p] <= f->ytop || (unsigned)ix >= WX || (unsigned)iz >= WZ) continue;
-        if (f->ring && (ix - f->ccx) * (ix - f->ccx) + (iz - f->ccz) * (iz - f->ccz) <= f->r2) {
-            /* (in the near ring: drawn by the polygons; its surface still hides what lies behind it) */
-            y = f->ytab[f->hm[(ix << 6) | iz]];
-            if (y < f->yb[p]) { f->yb[p] = (s16)y; if (f->pw == 2) f->yb[p + 1] = (s16)y; }
-            continue;
-        }
-        i = (ix << 6) | iz; h = f->hm[i]; y = f->ytab[h];
-        if (y < f->yb[p]) {
-            f->ev[2 * n] = p | f->st[i] << 8 | (h > f->hp[p]) << 13 | (((i >> 6) ^ i) & 1) << 14;
-            f->ev[2 * n + 1] = (y & 0xFFFF) | (u32)f->yb[p] << 16;
-            n++;
-            f->yb[p] = (s16)y; if (f->pw == 2) f->yb[p + 1] = (s16)y;
-        }
-        f->hp[p] = (u8)h; if (f->pw == 2) f->hp[p + 1] = (u8)h;
-    }
-    return n;
-}
-#else
 int far_step(FarStep *f);                          /* src/seg.s */
-#endif
 
-#ifdef HOST
-static void far_span(u32 *colL, u32 *colR, int nc, int k, int a, int b, const u32 *pat, u32 E, int rim)
-{
-    int i, wa = a >> 4, wb = (b - 1) >> 4, w;
-    u32 ma = 0xFFFFFFFFu << ((a & 15) << 1), mb = 0xFFFFFFFFu >> ((15 - ((b - 1) & 15)) << 1), er = rim ? (3u << ((a & 15) << 1)) : 0;
-    for (i = 0; i < nc; i++, colL += 16, colR += 16) {
-        u32 P = pat[(k + i) & 7], v = (P & ~er) | (E & er);
-        if (wa == wb) { PUT(colL, wa, v, ma & mb); PUT(colR, wa, v, ma & mb); continue; }
-        PUT(colL, wa, v, ma); PUT(colR, wa, v, ma);
-        for (w = wa + 1; w < wb; w++) { colL[w] = P; colR[w] = P; }
-        PUT(colL, wb, P, mb); PUT(colR, wb, P, mb);
-    }
-}
-#else
 void far_span(u32 *colL, u32 *colR, int nc, int k, int a, int b, const u32 *pat, u32 E, int rim);   /* src/seg.s */
-#endif
 /* both eyes' columns of a far stretch: left at +s, right at -s */
-static u32 far_dummy[4 * 16];                      /* (where right-eye columns off the screen go) */
+static u32 far_dummy[4 * 16];                      /* where right-eye columns off the screen go */
 #define RCOL(c, nc) ((c) >= 0 && (c) + (nc) <= VW ? fb_r + (c) * 16 : far_dummy)
 #define FAR_SPAN(c, s, nc, a, b, lv, tex, rim) far_span(fb_l + ((c) + (s)) * 16, RCOL((c) - (s), nc), nc, (c), a, b, \
     &lev_pat[tex][lv][0], lev_pat[T_FLAT][(lv) > 12 ? (lv) - 12 : 0][(c) & 7], rim)
@@ -1603,7 +1406,7 @@ static void far_field(void)
         }
         s = (disparity(zc0) + 8) >> 4;
         f = FOGI(d);
-        fs.ytop = ytab[maxh];                      /* (no surface here reaches above this row) */
+        fs.ytop = ytab[maxh];                      /* no surface here reaches above this row */
         fs.pw = pw; fs.ring = d < (VIEW_R + 2) * 256;
         /* the line of samples at this depth, sample p at the centre of its 2 or 4 columns; a pitched camera meets the
            ground's typical height (the camera's level - 2) a little aside */
@@ -1616,7 +1419,7 @@ static void far_field(void)
             u32 ea = far_ev[2 * e], eb = far_ev[2 * e + 1];
             int pp = ea & 255, t = (ea >> 8) & 31, rise = (ea >> 13) & 1, y = (s16)(eb & 0xFFFF), b = (s16)(eb >> 16), a = y < 0 ? 0 : y, lv;
             lv = (rise ? lev_base[t][4] : lev_base[t][3]) + ((ea >> 14) & 1 ? 2 : -2);
-            if (t == WATER) lv = 14 + ((((ea >> 14) & 1) ^ ((d >> 8) & 1)) ? 6 : 0) + ((SEA_HZ - 14) * f >> 8);   /* (the sea: dark with a glint) */
+            if (t == WATER) lv = 14 + ((((ea >> 14) & 1) ^ ((d >> 8) & 1)) ? 6 : 0) + ((SEA_HZ - 14) * f >> 8);   /* the sea: dark with a glint */
             else lv += ((FOG_L - lv) * f) >> 8;
             if (lv > 48) lv = 48;
             if (lv < 0) lv = 0;
@@ -1625,7 +1428,7 @@ static void far_field(void)
                 int built = t == COBBLE || t == BRICK || t == PLANKS || t == LOG || t == GLASS || t == LAMP || t == WOOL || t == GOLD;
                 FAR_SPAN(2 * pp, s, nc, a, b, lv, built ? (t == PLANKS || t == LOG ? T_WOOD : T_COBBLE) : T_FLAT, rise && y >= 0);
                 if (built && b - a > 3 && f < 200) {
-                    /* (a building far off: a dark seam at each block's top edge, so it still reads as blocks, not a slab) */
+                    /* a building far off: a dark seam at each block's top edge, so it still reads as blocks, not a slab */
                     int hh, r, ls = lv > 14 ? lv - 14 : 0;
                     for (hh = WH; hh > 0; hh--) {
                         r = ytab[hh];
@@ -1693,12 +1496,12 @@ static void far_trees(void)
         V3 w, c;
         int dx = tree_x[i] - ccx, dz = tree_z[i] - ccz;
         if (dx * dx + dz * dz <= VIEW_R * VIEW_R) continue;
-        if (CELL(tree_x[i], tree_y[i], tree_z[i]) != LOG) continue;   /* (cut down) */
+        if (CELL(tree_x[i], tree_y[i], tree_z[i]) != LOG) continue;   /* cut down */
         w.x = (tree_x[i] << 8) + 128; w.z = (tree_z[i] << 8) + 128; w.y = (tree_y[i] << 8) + 256;
         cam_to(&w, &c);
         if (c.z < 3 * 256 || c.z > FAR1 + 512 || c.x > c.z || c.x < -c.z) continue;
         tz[i] = c.z;
-        for (j = n; j > 0 && tz[order[j - 1]] < c.z; j--) order[j] = order[j - 1];   /* (far first) */
+        for (j = n; j > 0 && tz[order[j - 1]] < c.z; j--) order[j] = order[j - 1];   /* far first */
         order[j] = (s16)i; n++;
     }
     /* the creatures past the near ring join the same far-to-near order (index 128 + i) */
@@ -1716,7 +1519,7 @@ static void far_trees(void)
     }
     for (j = 0; j < n; j++) {
         V3 w, c, g;
-        s32 inv, sx, sy, gy, r, s, f, k;
+        s32 inv, sx, sy, gy, r, s, f;
         int lv, col, step;
         i = order[j];
         if (i >= 128) {
@@ -1732,20 +1535,20 @@ static void far_trees(void)
         inv = (FOC << 16) / c.z;
         sx = (CX4 + ((c.x * inv) >> 12)) >> 4; sy = (CY4 - ((c.y * inv) >> 12)) >> 4;
         gy = g.z > 32 ? (CY4 - ((g.y * ((FOC << 16) / g.z)) >> 12)) >> 4 : sy;
-        r = (470 * inv) >> 16;                     /* (a crown of 1.8 blocks, in pixels) */
+        r = (470 * inv) >> 16;                     /* a crown of 1.8 blocks, in pixels */
         if (r < 2) r = 2;
         s = (disparity(c.z) + 8) >> 4;
         f = FOGI(c.z);
         lv = lev_base[LEAVES][3]; lv += ((FOG_L - lv) * f) >> 8;
         for (step = 0; step < far_ns - 1 && far_d[step + 1] < c.z; step++) ;
         {
-            int tw = r / 5 + 2, e;
+            int tw = r / 5 + 2;
             for (col = (sx - r) & ~1; col <= sx + r; col += 2) {
                 int p = col >> 1, a, b, dxp = col + 1 - sx, adx = dxp < 0 ? -dxp : dxp, top, kk, mid, trunk = adx < tw;
                 if (p < 0 || p >= 192) continue;
-                top = step > 0 ? far_hist[step - 1][p] : VH;   /* (what is nearer than the tree hides it below this row) */
+                top = step > 0 ? far_hist[step - 1][p] : VH;   /* what is nearer than the tree hides it below this row */
                 /* a rounded square: full height in the middle, the corners cut */
-                kk = adx <= r - r / 4 ? r : r - r / 4;      /* (a block of leaves with its corners cut, as the real crowns) */
+                kk = adx <= r - r / 4 ? r : r - r / 4;      /* a block of leaves with its corners cut, as the real crowns */
                 kk = (kk * 7) >> 3;
                 a = sy - kk; b = sy + kk + 1; mid = sy - (kk >> 2);
                 {
@@ -1835,7 +1638,7 @@ void draw_cube_cam(const V3 *c, s32 half, int mat, int lit)
         s32 zz = (x * cy + z * cyc) >> 14, yy = cs[i][1] * half;
         v[i].x = c->x + ((x * cyc - z * cy) >> 14);
         if (cube_tilt) {
-            /* (tipped toward the viewer: the icons show their tops) */
+            /* tipped toward the viewer: the icons show their tops */
             s32 st = SIN(cube_tilt), ct = COS(cube_tilt), y2 = (yy * ct - zz * st) >> 14;
             zz = (yy * st + zz * ct) >> 14; yy = y2;
         }
@@ -1891,42 +1694,17 @@ void render_init(void)
    waits for the display */
 void render_prepare(void)
 {
-    u32 t = PT;
     setup_cam();
     make_sky();
     prepare_world();
-    prof[0] += PT - t;
 }
 
-#ifdef VRAMCHK
-/* (tools/check_vram.py: the tables in the character memory beside the framebuffers must come out of a picture untouched) */
-u32 vram_bad;
-static u32 vsum(void)
-{
-    const u32 *t[4];
-    u32 s = 0;
-    int i, j;
-    t[0] = (const u32 *)hmap; t[1] = (const u32 *)surf_t; t[2] = (const u32 *)col_lo; t[3] = (const u32 *)col_hi;
-    for (j = 0; j < 4; j++) for (i = 0; i < WX * WZ / 4; i++) s = s * 31 + t[j][i];
-    return s;
-}
-#endif
 void render_draw(void)
 {
-    u32 t = PT, t2;
-#ifdef VRAMCHK
-    u32 vs = vsum();
-#endif
     sky_fill(fb_l);
     sky_fill(fb_r);
-    t2 = PT; prof[1] += t2 - t; t = t2;
     if (!water_view) { sky_things(); sea_glints(); }
-    t2 = PT; prof[2] += t2 - t; t = t2;
     draw_world();
-    t2 = PT; prof[3] += t2 - t; t = t2;
-#ifdef VRAMCHK
-    if (vsum() != vs) vram_bad++;
-#endif
 }
 
 void render_frame(void)

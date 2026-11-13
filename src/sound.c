@@ -4,7 +4,7 @@
 
 typedef struct { const s8 *p; s32 n; } PcmStream;
 volatile PcmStream pcm[3];
-volatile unsigned int pcm_irqs, pcm_time, pcm_step = 1;
+volatile unsigned int pcm_time, pcm_step = 1;
 /* back to 10 kHz (the PCM interrupt slows to 1 kHz when idle) */
 void pcm_wake(void)
 {
@@ -54,19 +54,13 @@ void sound_tick(void)
         mi++;
     }
     mframe++;
-    if (mframe > MUS_LEN + 150) rest = 50 * 40;  /* (then quiet for 40 seconds, as a calm game does) */
+    if (mframe > MUS_LEN + 150) rest = 50 * 40;  /* then quiet for 40 seconds, as a calm game does */
 }
 
 /* a sound: slot 0 for digging and placing, 1-2 for steps in turn */
-#ifdef DEMO
-volatile s32 demo_sfx[32], demo_sfx_n;           /* (tools/video: the sounds started since the director last looked) */
-#endif
 void sfx(int id, int vol)
 {
     int s;
-#ifdef DEMO
-    if (demo_sfx_n < 32) demo_sfx[demo_sfx_n++] = id | (vol << 8);
-#endif
     if (id < 0 || id >= NSFX) return;
     if (vol == 0) s = 0;
     else { step_slot ^= 1; s = 1 + step_slot; }

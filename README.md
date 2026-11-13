@@ -14,7 +14,7 @@ with your sword.
 
 Get **`virtualcraft.vb`** (2 MB) from the [Releases](../../releases) page.
 
-SHA-1: `40b475d54317682cb58d293cab6a2061b9156820`
+SHA-1: `a4de2d6df76eedb4c1a32c9b32966abdd51a1865`
 
 ## Playing it
 

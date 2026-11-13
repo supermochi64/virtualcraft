@@ -14,7 +14,7 @@ extern s32 meadow_x, meadow_z;
 #define DX 4
 #define DY 6
 #define LOGO_W (12 * 6 * DX)
-#define LMASK ((u8 *)R_FB2 + 12 * 1024)                /* (the letters' pixels, a byte each, x major: 288 x 42) */
+#define LMASK ((u8 *)R_FB2 + 12 * 1024)                /* the letters' pixels, a byte each, x major: 288 x 42 */
 static int logo_dot(const char *s, int n, int x, int y)
 {
     (void)s; (void)n;
@@ -54,14 +54,14 @@ static void logo_make(const char *s)
             int lx = x - 2, ly = y - 2, sh = -1, k;
             if (logo_dot(s, n, lx, ly)) {
                 u32 hs = (u32)((lx / 2) * 7919 + (ly / 2) * 104729 + (lx / DX) * 31) * 2654435761u >> 28;
-                sh = hs < 5 ? 3 : hs > 12 ? 1 : 2;                                          /* (stone: speckles) */
-                if (!logo_dot(s, n, lx, ly - 1) || !logo_dot(s, n, lx, ly - 2)) sh = 3;      /* (the lit top) */
-                else if (!logo_dot(s, n, lx - 1, ly)) sh = sh > 2 ? 3 : sh + 1;            /* (the lit left) */
-                if (!logo_dot(s, n, lx, ly + 1) || !logo_dot(s, n, lx + 1, ly)) sh = 1;     /* (the shaded bottom, right) */
+                sh = hs < 5 ? 3 : hs > 12 ? 1 : 2;                                          /* stone: speckles */
+                if (!logo_dot(s, n, lx, ly - 1) || !logo_dot(s, n, lx, ly - 2)) sh = 3;      /* the lit top */
+                else if (!logo_dot(s, n, lx - 1, ly)) sh = sh > 2 ? 3 : sh + 1;            /* the lit left */
+                if (!logo_dot(s, n, lx, ly + 1) || !logo_dot(s, n, lx + 1, ly)) sh = 1;     /* the shaded bottom, right */
             } else {
-                for (k = 1; k <= 5 && sh < 0; k++)                                         /* (the pushed-out side) */
+                for (k = 1; k <= 5 && sh < 0; k++)                                         /* the pushed-out side */
                     if (logo_dot(s, n, lx - (k * 2) / 3, ly - k)) sh = (k == 5 || !logo_dot(s, n, lx - (k * 2) / 3, ly - k + 1)) ? 0 : 1;
-                if (sh < 0) {                                                               /* (the rim) */
+                if (sh < 0) {                                                               /* the rim */
                     static const s8 o[8][2] = {{-1, 0}, {1, 0}, {0, -1}, {0, 1}, {-2, 0}, {2, 0}, {0, -2}, {0, 2}};
                     for (k = 0; k < 8 && sh < 0; k++) if (logo_dot(s, n, lx + o[k][0], ly + o[k][1])) sh = 0;
                     for (k = 1; k <= 6 && sh < 0; k++)
@@ -102,11 +102,7 @@ void title_screen(void)
         if (!go && (k & K_START) && ticks - t0 > 20) go = 1;
         if (pad_on) break;
         /* a slow look across the meadow from its south side: the cabin, the flowers, the pond */
-#ifdef CINEMA
-        a = t * 6;                                 /* (the video mode: the pan by pictures, 2 steps each) */
-#else
         a = (ticks - t0) * 3;
-#endif
         cam_x = meadow_x + 256; cam_z = meadow_z - 3 * 256; cam_y = spawn_y + 3 * 256;
         cam_yaw = (u16)((150 + (SIN(a) >> 5)) & 4095); cam_pitch = (u16)(4096 - 230);
         frame_no = t;
