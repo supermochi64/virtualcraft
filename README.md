@@ -19,9 +19,7 @@ SHA-1: `40b475d54317682cb58d293cab6a2061b9156820`
 ## Playing it
 
 - **Emulators:** any Virtual Boy emulator that runs commercial games, e.g. Mednafen or RetroArch with the Beetle VB core.
-  Developed and tested in Mednafen's Virtual Boy core.
-- **Real hardware:** the ROM is 2 MB, so it fits 2 MB flash carts. It has not been tested on a real Virtual Boy yet:
-  reports are welcome.
+- **Flash carts:** the ROM is 2 MB, so it fits 2 MB flash carts.
 
 ## Controls
 
