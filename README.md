@@ -29,6 +29,7 @@ SHA-1: `a4de2d6df76eedb4c1a32c9b32966abdd51a1865`
 
 - **Emulators:** any Virtual Boy emulator that runs commercial games, e.g. Mednafen or RetroArch with the Beetle VB core.
 - **Flash carts:** the ROM is 2 MB, so it fits 2 MB flash carts.
+- **HyperFlash32:** optional [e-ink labels](hyperflash32/README.md) for the red, monochrome, and yellow display variants.
 
 ## Controls
 
